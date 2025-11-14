@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZenCube Command Center</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg-gradient: radial-gradient(circle at top left, #181c2b 0%, #121421 40%, #0c0e17 100%);
+            --card-bg: rgba(20, 24, 36, 0.9);
+            --card-border: rgba(163, 178, 255, 0.12);
+            --accent: #7f8cff;
+            --accent-strong: #5663ff;
+            --accent-soft: rgba(127, 140, 255, 0.12);
+            --success: #55e0a3;
+            --error: #ff6c87;
+            --warning: #ffce5c;
+            --text-primary: #f1f3ff;
+            --text-muted: #94a3c6;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .page {
+            width: min(1200px, 94vw);
+            margin: 0 auto;
+            padding: 40px 0 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, rgba(127, 140, 255, 0.15), rgba(86, 99, 255, 0.1));
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 28px 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            backdrop-filter: blur(12px);
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(28px, 4vw, 36px);
+            font-weight: 700;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--text-muted);
+            max-width: 640px;
+            line-height: 1.5;
+        }
+
+        .stats-wrapper {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+        }
+
+        .stat-card {
+            padding: 18px 20px;
+            border-radius: 16px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: 0 20px 35px rgba(4, 6, 15, 0.45);
+        }
+
+        .stat-card .label {
+            font-size: 13px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.12em;
+        }
+
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+            gap: 24px;
+        }
+
+        .col {
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+        }
+
+        .col::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .col::-webkit-scrollbar-thumb {
+            background: rgba(127, 140, 255, 0.25);
+            border-radius: 8px;
+        }
+
+        .col::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 25px 40px rgba(8, 10, 20, 0.55);
+        }
+
+        .card h2 {
+            margin: 0 0 16px;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .dropzone {
+            border: 1px dashed rgba(127, 140, 255, 0.4);
+            border-radius: 14px;
+            padding: 26px 16px;
+            text-align: center;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            background: rgba(127, 140, 255, 0.04);
+        }
+
+        .dropzone.dragging {
+            border-color: var(--accent);
+            background: rgba(127, 140, 255, 0.12);
+        }
+
+        .dropzone strong {
+            color: var(--accent);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="number"] {
+            background: rgba(15, 18, 28, 0.9);
+            border: 1px solid rgba(127, 140, 255, 0.18);
+            border-radius: 12px;
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: border 0.2s, box-shadow 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(127, 140, 255, 0.2);
+        }
+
+        .limits-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .limit-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: rgba(14, 16, 24, 0.9);
+            border: 1px solid rgba(127, 140, 255, 0.12);
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .limit-item label {
+            font-size: 14px;
+            color: var(--text-muted);
+            flex: 1;
+        }
+
+        .limit-item input[type="checkbox"] {
+            accent-color: var(--accent);
+            width: 18px;
+            height: 18px;
+        }
+
+        .limit-item input[type="number"] {
+            width: 90px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        button {
+            border: none;
+            border-radius: 12px;
+            padding: 12px 18px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+
+        button.primary {
+            flex: 1;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+            color: #fff;
+            box-shadow: 0 18px 28px rgba(86, 99, 255, 0.35);
+        }
+
+        button.secondary {
+            background: rgba(127, 140, 255, 0.12);
+            color: var(--text-primary);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        button:not(:disabled):hover {
+            transform: translateY(-1px);
+        }
+
+        .status-message {
+            margin-top: 14px;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .status-message.success { color: var(--success); }
+        .status-message.error { color: var(--error); }
+        .status-message.warning { color: var(--warning); }
+
+        .analysis-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .analysis-summary {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            padding: 6px 10px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .tag.critical { background: rgba(255, 108, 135, 0.15); color: var(--error); }
+        .tag.high { background: rgba(255, 206, 92, 0.15); color: var(--warning); }
+        .tag.medium { background: rgba(127, 205, 255, 0.15); color: #7fcfff; }
+        .tag.total { background: rgba(127, 140, 255, 0.18); color: var(--accent); }
+
+        .analysis-item {
+            border: 1px solid rgba(127, 140, 255, 0.15);
+            border-radius: 12px;
+            padding: 12px 14px;
+            background: rgba(14, 16, 24, 0.9);
+        }
+
+        .analysis-item .title {
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .analysis-item .meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .analysis-item pre {
+            margin: 0;
+            font-size: 13px;
+            background: rgba(8, 10, 18, 0.9);
+            border-radius: 10px;
+            padding: 8px 10px;
+            color: #d7daff;
+            overflow-x: auto;
+        }
+
+        .terminal-card {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            color: var(--text-muted);
+        }
+
+        .terminal-output {
+            background: rgba(10, 11, 17, 0.95);
+            border: 1px solid rgba(127, 140, 255, 0.18);
+            border-radius: 14px;
+            padding: 18px;
+            font-family: "Fira Mono", "SFMono-Regular", Consolas, monospace;
+            font-size: 14px;
+            flex: 1;
+            min-height: 240px;
+            max-height: 100%;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .terminal-line { margin-bottom: 4px; }
+        .terminal-line.info { color: var(--accent); }
+        .terminal-line.input { color: var(--warning); }
+        .terminal-line.error { color: var(--error); }
+
+        .terminal-input {
+            margin-top: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(14, 16, 24, 0.9);
+            border: 1px solid rgba(127, 140, 255, 0.15);
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-family: "Fira Mono", monospace;
+        }
+
+        .terminal-input span {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .terminal-input input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+        }
+
+        .chart-card {
+            padding-bottom: 12px;
+            max-height: 30vh;
+            overflow: hidden;
+        }
+
+        .chart-card canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .analysis-card {
+            max-height: 36vh;
+            overflow-y: auto;
+        }
+
+        .analysis-card::-webkit-scrollbar,
+        .terminal-output::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .analysis-card::-webkit-scrollbar-thumb,
+        .terminal-output::-webkit-scrollbar-thumb {
+            background: rgba(127, 140, 255, 0.25);
+            border-radius: 8px;
+        }
+
+        .analysis-card::-webkit-scrollbar-track,
+        .terminal-output::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .terminal-card {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .terminal-output {
+            background: rgba(10, 11, 17, 0.95);
+            border: 1px solid rgba(127, 140, 255, 0.18);
+            border-radius: 14px;
+            padding: 18px;
+            font-family: "Fira Mono", "SFMono-Regular", Consolas, monospace;
+            font-size: 14px;
+            flex: 1;
+            min-height: 280px;
+            max-height: 60vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        @media (max-width: 1060px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .page { padding: 28px 0 40px; }
+            .card { padding: 20px; }
+            .terminal-output { min-height: 220px; }
+            .actions { flex-direction: column; }
+            button.primary, button.secondary { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <header class="hero">
+            <h1>🧊 ZenCube Command Center</h1>
+            <p>Upload or point to any program on your system, scan it for vulnerabilities, and execute it securely inside the ZenCube sandbox with live telemetry and an interactive terminal.</p>
+        </header>
+
+        <section class="stats-wrapper">
+            <div class="stat-card">
+                <span class="label">CPU Usage</span>
+                <span class="value" id="cpuStat">0%</span>
+            </div>
+            <div class="stat-card">
+                <span class="label">Memory</span>
+                <span class="value" id="memStat">0 MB</span>
+            </div>
+            <div class="stat-card">
+                <span class="label">Threads</span>
+                <span class="value" id="threadStat">0</span>
+            </div>
+            <div class="stat-card">
+                <span class="label">Elapsed</span>
+                <span class="value" id="timeStat">0s</span>
+            </div>
+        </section>
+
+        <div class="main-grid">
+            <div class="col left">
+                <div class="card">
+                    <h2>File Selection & Resource Limits</h2>
+                    <div class="dropzone" id="dropzone">
+                        <input type="file" id="codeFile" accept=".c,.cc,.cxx,.cpp,.py,.java,.js,.rb,.pl,.sh,.ps1,.bat" hidden>
+                        <p id="fileLabel"><strong>Click to browse</strong> or drop a file here to analyze & execute.</p>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label for="manualPath">Or run an existing file (absolute path)</label>
+                        <input type="text" id="manualPath" placeholder="/Users/you/projects/demo/examples/hello_python.py">
+                    </div>
+
+                    <div class="limits-grid">
+                        <div class="limit-item">
+                            <label for="cpuLimit">CPU seconds</label>
+                            <input type="checkbox" id="cpuEnabled" checked>
+                            <input type="number" id="cpuLimit" value="5" min="1">
+                        </div>
+                        <div class="limit-item">
+                            <label for="memLimit">Memory (MB)</label>
+                            <input type="checkbox" id="memEnabled" checked>
+                            <input type="number" id="memLimit" value="100" min="16" step="16">
+                        </div>
+                        <div class="limit-item">
+                            <label for="procsLimit">Processes</label>
+                            <input type="checkbox" id="procsEnabled">
+                            <input type="number" id="procsLimit" value="10" min="1">
+                        </div>
+                        <div class="limit-item">
+                            <label for="fsizeLimit">File size (MB)</label>
+                            <input type="checkbox" id="fsizeEnabled">
+                            <input type="number" id="fsizeLimit" value="50" min="1">
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="primary" id="analyzeRunBtn" onclick="analyzeAndRun()">Analyze &amp; Run</button>
+                        <button class="secondary" id="stopBtn" onclick="stopSandbox()" disabled>Stop</button>
+                    </div>
+
+                    <div class="status-message" id="statusMessage">Select a file or provide a path to get started.</div>
+                </div>
+
+                <div class="card analysis-card">
+                    <h2>Analysis Report</h2>
+                    <div id="analysisResults" class="analysis-list">
+                        <div class="status-message">Awaiting analysis...</div>
+                    </div>
+                </div>
+
+                <div class="card chart-card">
+                    <h2>Resource Timeline</h2>
+                    <canvas id="resourceChart"></canvas>
+                </div>
+            </div>
+
+            <div class="col right">
+                <div class="card terminal-card">
+                    <div class="terminal-header">
+                        <span>Interactive Sandbox Terminal</span>
+                        <button class="secondary" onclick="clearTerminal()">Clear</button>
+                    </div>
+                    <div class="terminal-output" id="terminalOutput"></div>
+                    <div class="terminal-input">
+                        <span>$</span>
+                        <input type="text" id="terminalInput" placeholder="Type here and press Enter" disabled>
+                        <button class="secondary" onclick="sendTerminalInput()" id="sendBtn" disabled>Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentProcessId = null;
+        let isRunning = false;
+
+        const cpuStat = document.getElementById('cpuStat');
+        const memStat = document.getElementById('memStat');
+        const threadStat = document.getElementById('threadStat');
+        const timeStat = document.getElementById('timeStat');
+        const analysisResults = document.getElementById('analysisResults');
+        const statusMessage = document.getElementById('statusMessage');
+        const analyzeRunBtn = document.getElementById('analyzeRunBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const terminalOutput = document.getElementById('terminalOutput');
+        const terminalInput = document.getElementById('terminalInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const codeFile = document.getElementById('codeFile');
+        const fileLabel = document.getElementById('fileLabel');
+        const manualPath = document.getElementById('manualPath');
+        const dropzone = document.getElementById('dropzone');
+
+        const chartCtx = document.getElementById('resourceChart').getContext('2d');
+        const chartData = {
+            labels: [],
+            cpu: [],
+            memory: []
+        };
+
+        const resourceChart = new Chart(chartCtx, {
+            type: 'line',
+            data: {
+                labels: chartData.labels,
+                datasets: [
+                    {
+                        label: 'CPU %',
+                        data: chartData.cpu,
+                        borderColor: 'rgba(127, 140, 255, 0.95)',
+                        backgroundColor: 'rgba(127, 140, 255, 0.1)',
+                        tension: 0.35,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Memory (MB)',
+                        data: chartData.memory,
+                        borderColor: 'rgba(86, 227, 175, 0.9)',
+                        backgroundColor: 'rgba(86, 227, 175, 0.08)',
+                        tension: 0.35,
+                        pointRadius: 0,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        ticks: { color: 'rgba(180, 190, 230, 0.6)' },
+                        grid: { color: 'rgba(127, 140, 255, 0.08)' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { color: 'rgba(180, 190, 230, 0.6)' },
+                        grid: { color: 'rgba(127, 140, 255, 0.08)' }
+                    },
+                    y1: {
+                        beginAtZero: true,
+                        position: 'right',
+                        ticks: { color: 'rgba(180, 190, 230, 0.6)' },
+                        grid: { drawOnChartArea: false }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: 'rgba(200, 210, 240, 0.75)' } }
+                }
+            }
+        });
+
+        function setStatus(message, type = 'info') {
+            statusMessage.textContent = message;
+            statusMessage.classList.remove('success', 'error', 'warning');
+            if (type === 'success' || type === 'error' || type === 'warning') {
+                statusMessage.classList.add(type);
+            }
+        }
+
+        function appendTerminalLine(text, type = 'output') {
+            const line = document.createElement('div');
+            line.classList.add('terminal-line');
+            if (type && type !== 'output') {
+                line.classList.add(type);
+            }
+            line.textContent = text;
+            terminalOutput.appendChild(line);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        function clearTerminal() {
+            terminalOutput.innerHTML = '';
+            if (currentProcessId) {
+                appendTerminalLine('--- awaiting output ---', 'info');
+            }
+        }
+
+        function resetTerminalState() {
+            currentProcessId = null;
+            isRunning = false;
+            analyzeRunBtn.disabled = false;
+            analyzeRunBtn.textContent = 'Analyze & Run';
+            stopBtn.disabled = true;
+            terminalInput.value = '';
+            terminalInput.disabled = true;
+            sendBtn.disabled = true;
+        }
+
+        function gatherLimits() {
+            const limits = {};
+            if (document.getElementById('cpuEnabled').checked) {
+                limits.cpu = document.getElementById('cpuLimit').value;
+            }
+            if (document.getElementById('memEnabled').checked) {
+                limits.memory = document.getElementById('memLimit').value;
+            }
+            if (document.getElementById('procsEnabled').checked) {
+                limits.processes = document.getElementById('procsLimit').value;
+            }
+            if (document.getElementById('fsizeEnabled').checked) {
+                limits.file_size = document.getElementById('fsizeLimit').value;
+            }
+            return limits;
+        }
+
+        function updateStats(data) {
+            cpuStat.textContent = `${data.cpu_percent}%`;
+            memStat.textContent = `${data.memory_mb} MB`;
+            threadStat.textContent = data.threads;
+            timeStat.textContent = `${data.elapsed_time}s`;
+
+            const timestamp = new Date(data.timestamp).toLocaleTimeString();
+            chartData.labels.push(timestamp);
+            chartData.cpu.push(data.cpu_percent);
+            chartData.memory.push(data.memory_mb);
+            if (chartData.labels.length > 60) {
+                chartData.labels.shift();
+                chartData.cpu.shift();
+                chartData.memory.shift();
+            }
+            resourceChart.update();
+        }
+
+        function renderAnalysis(result) {
+            if (!result || result.error) {
+                analysisResults.innerHTML = `<div class="status-message error">${result ? result.error : 'Analysis unavailable.'}</div>`;
+                return;
+            }
+
+            const summary = document.createElement('div');
+            summary.className = 'analysis-summary';
+            summary.innerHTML = `
+                <span class="tag total">Total: ${result.total_issues}</span>
+                <span class="tag critical">Critical: ${result.critical}</span>
+                <span class="tag high">High: ${result.high}</span>
+                <span class="tag medium">Medium: ${result.medium}</span>
+            `;
+
+            const list = document.createElement('div');
+            list.className = 'analysis-list';
+
+            [...(result.vulnerabilities || []), ...(result.warnings || [])].forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'analysis-item';
+                div.innerHTML = `
+                    <div class="title">${item.type} <span style="color: var(--text-muted); font-size: 12px;">(${item.severity})</span></div>
+                    <div class="meta">Line ${item.line}</div>
+                    <pre>${(item.code || '').trim()}</pre>
+                    <div class="meta">${item.message}</div>
+                `;
+                list.appendChild(div);
+            });
+
+            analysisResults.innerHTML = '';
+            analysisResults.appendChild(summary);
+            if (list.children.length > 0) {
+                analysisResults.appendChild(list);
+            } else {
+                const clean = document.createElement('div');
+                clean.className = 'status-message success';
+                clean.textContent = 'No critical issues detected. Ready to run!';
+                analysisResults.appendChild(clean);
+            }
+        }
+
+        function analyzeAndRun() {
+            if (isRunning) {
+                setStatus('A program is already running. Stop it before starting another.', 'error');
+                return;
+            }
+
+            const hasFile = codeFile.files && codeFile.files.length > 0;
+            const manual = manualPath.value.trim();
+
+            if (!hasFile && !manual) {
+                setStatus('Select a file or enter a path to continue.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            if (hasFile) {
+                formData.append('file', codeFile.files[0]);
+            }
+            if (manual) {
+                formData.append('file_path', manual);
+            }
+
+            const limits = gatherLimits();
+            Object.entries(limits).forEach(([key, value]) => {
+                if (value) {
+                    formData.append(key, value);
+                }
+            });
+
+            analyzeRunBtn.disabled = true;
+            analyzeRunBtn.textContent = 'Analyzing...';
+            setStatus('Analyzing code for vulnerabilities...');
+            clearTerminal();
+
+            fetch('/api/analyze-run', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                analyzeRunBtn.disabled = false;
+                analyzeRunBtn.textContent = 'Analyze & Run';
+
+                if (data.analysis) {
+                    renderAnalysis(data.analysis);
+                }
+
+                if (!data.success) {
+                    setStatus(data.error || 'Failed to run in sandbox.', 'error');
+                    appendTerminalLine(data.error || 'Error launching process.', 'error');
+                    resetTerminalState();
+                    return;
+                }
+
+                setStatus('Sandbox running. Live output streaming below.', 'success');
+                appendTerminalLine(`Executing: ${data.command.join(' ')}`, 'info');
+
+                currentProcessId = data.process_id;
+                isRunning = true;
+                stopBtn.disabled = false;
+                analyzeRunBtn.disabled = true;
+                analyzeRunBtn.textContent = 'Running...';
+                terminalInput.disabled = false;
+                sendBtn.disabled = false;
+                terminalInput.focus();
+
+                chartData.labels.length = 0;
+                chartData.cpu.length = 0;
+                chartData.memory.length = 0;
+                resourceChart.update();
+            })
+            .catch(err => {
+                console.error('Analyze & Run error:', err);
+                analyzeRunBtn.disabled = false;
+                analyzeRunBtn.textContent = 'Analyze & Run';
+                setStatus('Unexpected error. Check console logs for details.', 'error');
+                appendTerminalLine(String(err), 'error');
+                resetTerminalState();
+            });
+        }
+
+        function stopSandbox() {
+            if (!currentProcessId) return;
+            fetch(`/api/stop/${currentProcessId}`, { method: 'POST' })
+                .then(() => {
+                    setStatus('Stop signal sent. Waiting for process to terminate...', 'warning');
+                })
+                .catch(() => {
+                    setStatus('Unable to send stop signal.', 'error');
+                });
+        }
+
+        function sendTerminalInput() {
+            if (!currentProcessId || terminalInput.disabled) return;
+            const value = terminalInput.value;
+            if (!value) return;
+            socket.emit('send_input', {
+                process_id: currentProcessId,
+                text: value,
+                append_newline: true
+            });
+            appendTerminalLine(`$ ${value}`, 'input');
+            terminalInput.value = '';
+        }
+
+        terminalInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                sendTerminalInput();
+            }
+        });
+
+        socket.on('resource_update', (data) => {
+            if (data.process_id === currentProcessId) {
+                updateStats(data);
+            }
+        });
+
+        socket.on('output', (data) => {
+            if (data.process_id === currentProcessId) {
+                appendTerminalLine(data.line);
+            }
+        });
+
+        socket.on('process_complete', (data) => {
+            if (data.process_id === currentProcessId) {
+                appendTerminalLine(`Process exited with code ${data.return_code}`, data.return_code === 0 ? 'info' : 'error');
+                setStatus(`Process finished with exit code ${data.return_code}`, data.return_code === 0 ? 'success' : 'error');
+                resetTerminalState();
+            }
+        });
+
+        socket.on('error', (data) => {
+            appendTerminalLine(data.message || 'Socket error occurred', 'error');
+            setStatus(data.message || 'Socket error occurred', 'error');
+        });
+
+        socket.on('connect', () => {
+            appendTerminalLine('Connected to ZenCube server.', 'info');
+        });
+
+        socket.on('disconnect', () => {
+            appendTerminalLine('Disconnected from ZenCube server.', 'error');
+            setStatus('Disconnected from server. Refresh the page.', 'error');
+            resetTerminalState();
+        });
+
+        codeFile.addEventListener('change', () => {
+            if (codeFile.files.length > 0) {
+                fileLabel.innerHTML = `<strong>${codeFile.files[0].name}</strong> selected.`;
+                manualPath.value = '';
+            } else {
+                fileLabel.innerHTML = '<strong>Click to browse</strong> or drop a file here to analyze & execute.';
+            }
+        });
+
+        dropzone.addEventListener('click', () => codeFile.click());
+        dropzone.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropzone.classList.add('dragging');
+        });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
+        dropzone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropzone.classList.remove('dragging');
+            if (event.dataTransfer.files.length) {
+                const dt = new DataTransfer();
+                dt.items.add(event.dataTransfer.files[0]);
+                codeFile.files = dt.files;
+                const changeEvent = new Event('change');
+                codeFile.dispatchEvent(changeEvent);
+            }
+        });
+
+        manualPath.addEventListener('input', () => {
+            if (manualPath.value.trim()) {
+                codeFile.value = '';
+                fileLabel.innerHTML = '<strong>Click to browse</strong> or drop a file here to analyze & execute.';
+            }
+        });
+
+        // Initial terminal message
+        appendTerminalLine('Ready. Upload a file or enter a path to begin.', 'info');
+    </script>
+</body>
+</html>
+
