@@ -36,7 +36,8 @@ socketio = SocketIO(
 # Global state
 running_processes = {}
 monitoring_threads = {}
-UPLOAD_DIR = Path('uploads')
+# Use /tmp on Vercel (read-only filesystem), otherwise use 'uploads'
+UPLOAD_DIR = Path('/tmp/zencube_uploads' if os.environ.get('VERCEL') else 'uploads')
 
 
 def ensure_upload_dir():
@@ -374,19 +375,20 @@ def analyze_code():
         return jsonify({'error': 'No file selected'}), 400
     
     # Save uploaded file temporarily
-    upload_dir = 'uploads'
-    os.makedirs(upload_dir, exist_ok=True)
-    file_path = os.path.join(upload_dir, file.filename)
-    file.save(file_path)
+    ensure_upload_dir()
+    original_name = secure_filename(file.filename) or f"upload_{uuid.uuid4().hex}"
+    file_path = UPLOAD_DIR / original_name
+    file.save(str(file_path))
     
     try:
         analyzer = CodeAnalyzer()
-        result = analyzer.analyze_file(file_path)
+        result = analyzer.analyze_file(str(file_path))
         return jsonify(result)
     finally:
         # Clean up uploaded file
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        file_path_obj = Path(file_path)
+        if file_path_obj.exists():
+            file_path_obj.unlink(missing_ok=True)
 
 @app.route('/api/run', methods=['POST'])
 def run_sandbox():
@@ -547,7 +549,7 @@ if __name__ == '__main__':
     # Create templates directory if it doesn't exist
     os.makedirs('templates', exist_ok=True)
     os.makedirs('static', exist_ok=True)
-    os.makedirs('uploads', exist_ok=True)
+    ensure_upload_dir()
     
     # Check if running on Vercel
     if os.environ.get('VERCEL'):
