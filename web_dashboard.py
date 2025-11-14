@@ -24,7 +24,14 @@ from code_analyzer import CodeAnalyzer
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['SECRET_KEY'] = 'zencube-secret-key-2025'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+# Configure SocketIO for Vercel compatibility (use polling as fallback)
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='threading',
+    allow_upgrades=True,
+    transports=['polling', 'websocket']
+)
 
 # Global state
 running_processes = {}

@@ -549,7 +549,16 @@
     </div>
 
     <script>
-        const socket = io();
+        // Configure SocketIO for Vercel (use polling instead of WebSocket)
+        const socket = io({
+            transports: ['polling', 'websocket'],
+            upgrade: true,
+            rememberUpgrade: false,
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            reconnectionAttempts: 5
+        });
         let currentProcessId = null;
         let isRunning = false;
 
@@ -605,7 +614,13 @@
                 maintainAspectRatio: false,
                 scales: {
                     x: {
-                        ticks: { color: 'rgba(180, 190, 230, 0.6)' },
+                        ticks: { 
+                            color: 'rgba(180, 190, 230, 0.6)',
+                            maxRotation: 45,
+                            minRotation: 45,
+                            maxTicksLimit: 10,
+                            padding: 8
+                        },
                         grid: { color: 'rgba(127, 140, 255, 0.08)' }
                     },
                     y: {
@@ -623,6 +638,11 @@
                 },
                 plugins: {
                     legend: { labels: { color: 'rgba(200, 210, 240, 0.75)' } }
+                },
+                layout: {
+                    padding: {
+                        bottom: 20
+                    }
                 }
             }
         });
@@ -687,7 +707,12 @@
             threadStat.textContent = data.threads;
             timeStat.textContent = `${data.elapsed_time}s`;
 
-            const timestamp = new Date(data.timestamp).toLocaleTimeString();
+            // Format timestamp as HH:MM:SS for compact display
+            const date = new Date(data.timestamp * 1000);
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            const timestamp = `${hours}:${minutes}:${seconds}`;
             chartData.labels.push(timestamp);
             chartData.cpu.push(data.cpu_percent);
             chartData.memory.push(data.memory_mb);
@@ -880,12 +905,18 @@
 
         socket.on('connect', () => {
             appendTerminalLine('Connected to ZenCube server.', 'info');
+            setStatus('Connected to server', 'success');
         });
 
-        socket.on('disconnect', () => {
-            appendTerminalLine('Disconnected from ZenCube server.', 'error');
-            setStatus('Disconnected from server. Refresh the page.', 'error');
+        socket.on('disconnect', (reason) => {
+            appendTerminalLine(`Disconnected from ZenCube server. Reason: ${reason}`, 'error');
+            setStatus('Disconnected from server. Real-time features may be limited on Vercel.', 'warning');
             resetTerminalState();
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('SocketIO connection error:', error);
+            setStatus('Connection error. Real-time features may not work on Vercel due to serverless limitations.', 'warning');
         });
 
         codeFile.addEventListener('change', () => {
